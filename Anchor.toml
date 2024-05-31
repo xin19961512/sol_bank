@@ -1,0 +1,20 @@
+[toolchain]
+
+[features]
+seeds = false
+skip-lint = false
+
+[programs.localnet]
+solana_bridge = "HQW9FafmgcTLLQTjtMaET7ViNiSe5Bk2fEW5jetNivCv"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "/root/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/solana_bridge.ts"
+hack = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/hack_test.ts"
+listen = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/listenEvent.ts"
