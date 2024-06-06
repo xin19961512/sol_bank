@@ -169,7 +169,7 @@ describe("solana_bridge", () => {
     let result = await program.account.myStorage.fetch(myStorage);
     console.log(`the owner ${result.owner} was stored in ${myStorage.toBase58()}`);
 
-    const tx = await program.methods.withdrawNative("bridge_fund_112",_bump, new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL)).accounts({
+    const tx = await program.methods.withdrawNative("bridge_fund_112", new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL)).accounts({
       myStorage:myStorage,
       pda:pragramPDA,
     }).rpc();
@@ -210,7 +210,7 @@ describe("solana_bridge", () => {
     );
     }
 
-    const tx = await program.methods.withdrawFt("bridge_fund_112",_bump, new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL)).accounts({
+    const tx = await program.methods.withdrawFt("bridge_fund_112", new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL)).accounts({
       myStorage:myStorage,
       pda:pragramPDA,
       to: to,

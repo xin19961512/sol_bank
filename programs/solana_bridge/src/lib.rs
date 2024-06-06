@@ -88,7 +88,7 @@ pub mod solana_bridge {
         require_keys_eq!(
             ctx.accounts.to_ata.owner.key(),
             ctx.accounts.pda.key(),
-            BridgeError::WrongPDA
+            BridgeError::WrongATAOwner
         );
         let pda_balance = ctx.accounts.from_ata.amount;
         require!(pda_balance >=  amount, BridgeError::DepositNE);
@@ -108,18 +108,22 @@ pub mod solana_bridge {
         Ok(())
     }
 
-    pub fn withdraw_native(ctx: Context<WithdrawNative>, key: String, bump: u8, amount: u64) -> Result<()> {
+    pub fn withdraw_native(ctx: Context<WithdrawNative>, key: String, amount: u64) -> Result<()> {
         require_keys_eq!(
             ctx.accounts.signer.key(),
             ctx.accounts.my_storage.owner,
             BridgeError::NotOwner
         );
 
+        let (bridge_key, _bump) = Pubkey::find_program_address(&[key.as_bytes().as_ref()], ctx.program_id);
+        msg!("find pda address is {}-{}", bridge_key, _bump);
+        require_keys_eq!(bridge_key, *ctx.accounts.pda.key, BridgeError::WrongPDA);
+
         msg!("withdraw native.");
         let pda_balance = ctx.accounts.pda.lamports();
         require!(pda_balance >= amount, BridgeError::WithdrawNE);       
 
-        let seeds: &[&[u8]] = &[key.as_bytes().as_ref(), &[bump]];
+        let seeds: &[&[u8]] = &[key.as_bytes().as_ref(), &[_bump]];
         let signer_seeds = &[&seeds[..]];
 
         let cpi_context = CpiContext::new(
@@ -139,7 +143,7 @@ pub mod solana_bridge {
         Ok(())
     }
 
-    pub fn withdraw_ft(ctx: Context<WithdrawFt>, key: String, bump: u8, amount :u64) -> Result<()> {
+    pub fn withdraw_ft(ctx: Context<WithdrawFt>, key: String, amount :u64) -> Result<()> {
         require_keys_eq!(
             ctx.accounts.authority.key(),
             ctx.accounts.my_storage.owner,
@@ -147,10 +151,15 @@ pub mod solana_bridge {
         );
 
         msg!("withdraw ft.");
+        // let bridge_key = Pubkey::create_program_address(&[key.as_bytes().as_ref()], ctx.program_id).unwrap();
+        let (bridge_key, _bump) = Pubkey::find_program_address(&[key.as_bytes().as_ref()], ctx.program_id);
+        msg!("find ft-pda address is {}", bridge_key);
+        require_keys_eq!(bridge_key, *ctx.accounts.pda.key, BridgeError::WrongPDA);
+
         let pda_balance = ctx.accounts.from_ata.amount;
         require!(pda_balance >= amount, BridgeError::WithdrawNE);       
 
-        let seeds: &[&[u8]] = &[key.as_bytes().as_ref(), &[bump]];
+        let seeds: &[&[u8]] = &[key.as_bytes().as_ref(), &[_bump]];
         let signer_seeds = &[&seeds[..]];
 
         let cpi_accounts = token::Transfer {

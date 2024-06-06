@@ -45,5 +45,7 @@ pub enum BridgeError {
     #[msg("PDA not fetch to the key")]
     WrongPDA,
     #[msg("ATA not fetch to the key")]
-    WrongATA
+    WrongATA,
+    #[msg("ATA owner not fetch to the PDA")]
+    WrongATAOwner,
 }
