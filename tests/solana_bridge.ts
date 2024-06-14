@@ -13,6 +13,9 @@ import { sendAndConfirmTransaction, Transaction } from '@solana/web3.js';
 import type { ConfirmOptions, Connection, PublicKey, Signer } from '@solana/web3.js';
 import { publicKey } from "@coral-xyz/anchor/dist/cjs/utils";
 
+import fs from 'fs'
+
+
 // 为不在曲线上的PDA程序创建对应的ATA账户
 export async function createPdaAssociatedTokenAccount(
   connection: Connection,
@@ -45,13 +48,21 @@ describe("solana_bridge", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
 
-  const mintpk = new anchor.web3.PublicKey("6MkRWmqMwimvbxtuUDEhUL5rKzkVbAMVbuysm2zYGBf6"); // token
+  const mintpk = new anchor.web3.PublicKey("CyZBZYBoxBdkZZF4u4BtEexiWBrDpn4FH7QyJ4iiQnNA"); // token
   // const mintpk = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112"); // wsol
   const program = anchor.workspace.SolanaBridge as Program<SolanaBridge>;
+
+  // Change this to be your programID
+  // const programID = "HQW9FafmgcTLLQTjtMaET7ViNiSe5Bk2fEW5jetNivCv";
+  // const idl = JSON.parse(fs.readFileSync('target/idl/solana_bridge.json', 'utf-8'))
+  // const program = new Program(idl, programID, anchor.getProvider());
+  console.log(program.programId.toBase58);
+
   // 初始化stroage的PDA账户内容，设置owner
   // it("Is initialized!", async () => {
   //   const [myStorage, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_storage")], program.programId);
   //   console.log("the storage account address is", myStorage.toBase58());
+  //   console.log("the program id is", program.programId.toBase58());
 
   //   await program.methods.initialize().accounts({ myStorage: myStorage }).rpc();
   // });
@@ -65,7 +76,7 @@ describe("solana_bridge", () => {
   // });
 
 
-  // // 修改storage中的owner
+  // 修改storage中的owner
   // it("modify owner!", async () => {
   //   // Add your test here.
   //   const [myStorage, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_storage")], program.programId);
@@ -77,6 +88,40 @@ describe("solana_bridge", () => {
   //   const txset = await program.methods.modifyOwner(from).accounts({myStorage:myStorage}).rpc();
   //   console.log("Your transaction signature", txset);
   // });
+
+  it("register token", async() => {
+    const [myStorage, _storage] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_storage")], program.programId);
+    console.log("the storage account address is", myStorage.toBase58());
+
+    const [pragramPDA, _pdabump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund")], program.programId);
+    console.log("the pragramPDA account address is", pragramPDA.toBase58(),"bump", _pdabump);
+
+    const [pragramUSDT, _usdtbump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("USDT_01")], program.programId);
+    console.log("the pragramPDA account address is", pragramUSDT.toBase58(),"bump", _usdtbump);
+    let to = pragramPDA;
+    let toAta = await getAssociatedTokenAddress(mintpk, to, true);
+    console.log(`to ATA addr: ${toAta.toString()}`);
+
+    const tx = await program.methods.registerToken("USDT_pda_001", "USDT_01").accounts({
+      myStorage: myStorage,
+      token: pragramUSDT,
+      pda: pragramPDA,
+      toAta: toAta,
+      mint: mintpk,
+      authority: program.provider.publicKey,
+      tokenProgram: TOKEN_PROGRAM_ID
+    }).rpc();
+    console.log("Your transaction signature", tx);
+  });
+
+  // it("get registed token", async() =>{
+  //       // Add your test here.
+  //       const [pragramUSDT, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("USDT")], program.programId);
+  //       console.log("the storage account address is", pragramUSDT.toBase58());
+  //       // read the account back
+  //       let result = await program.account.myToken.fetch(pragramUSDT);
+  //       console.log(`the mint ${result.tokenMint}, the token ATA is ${result.tokenAta}}`);
+  // })
 
   it("get owner!", async () => {
     // Add your test here.
@@ -91,7 +136,7 @@ describe("solana_bridge", () => {
   it("deposit native to PDA", async () => {
     // Add your test here.
     // let myKeypair = anchor.web3.Keypair.generate();
-    const [pragramPDA, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund_112")], program.programId);
+    const [pragramPDA, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund")], program.programId);
     console.log("the fundaddress account address is", pragramPDA.toBase58(),"bump", _bump);
 
     const tx = await program.methods.depositNative(new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL), "ETH", "0xdead").accounts({
@@ -115,10 +160,10 @@ describe("solana_bridge", () => {
     let fromAta = await getAssociatedTokenAddress(mintpk, from);
     console.log(`from ATA addr: ${fromAta.toString()}`);
 
-    const [bridgeFund_Wrong, _bum_Wrong] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund_Wrong")], program.programId);
-    console.log("the pragramPDA account address is", bridgeFund_Wrong.toBase58(),"bump", _bum_Wrong);
+    // const [bridgeFund_Wrong, _bum_Wrong] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund_Wrong")], program.programId);
+    // console.log("the pragramPDA account address is", bridgeFund_Wrong.toBase58(),"bump", _bum_Wrong);
 
-    const [pragramPDA, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund_112")], program.programId);
+    const [pragramPDA, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund")], program.programId);
     console.log("the pragramPDA account address is", pragramPDA.toBase58(),"bump", _bump);
     let to = pragramPDA;
     let toAta = await getAssociatedTokenAddress(mintpk, to, true);
@@ -136,6 +181,7 @@ describe("solana_bridge", () => {
             payer,
             mintpk,
             pragramPDA
+            // bridgeFund_Wrong
         );
       }
     } catch (error) {
@@ -143,7 +189,7 @@ describe("solana_bridge", () => {
       return;
     }
 
-    const tx = await program.methods.depositFt(new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL), "ETH", "0xdead").accounts({
+    const tx = await program.methods.depositFt(new anchor.BN(0.2 * anchor.web3.LAMPORTS_PER_SOL), "ETH", "0xdead").accounts({
       from: from,
       to: to,
       pda: pragramPDA,
@@ -162,14 +208,14 @@ describe("solana_bridge", () => {
 
     // let keySeed = myStorage.toBytes;
     // const [pragramPDA, _bump] = anchor.web3.PublicKey.findProgramAddressSync([keySeed], program.programId);
-    const [pragramPDA, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund_112")], program.programId);
+    const [pragramPDA, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund")], program.programId);
     console.log("the pragramPDA account address is", pragramPDA.toBase58(),"bump", _bump);
 
     // read the account back
     let result = await program.account.myStorage.fetch(myStorage);
     console.log(`the owner ${result.owner} was stored in ${myStorage.toBase58()}`);
 
-    const tx = await program.methods.withdrawNative("bridge_fund_112", new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL)).accounts({
+    const tx = await program.methods.withdrawNative("bridge_fund", new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL)).accounts({
       myStorage:myStorage,
       pda:pragramPDA,
     }).rpc();
@@ -182,7 +228,7 @@ describe("solana_bridge", () => {
     const [myStorage, _StorageBump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_storage")], program.programId);
     console.log("the storage PDA address is", myStorage.toBase58(),"bump", _StorageBump);
 
-    const [pragramPDA, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund_112")], program.programId);
+    const [pragramPDA, _bump] = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("bridge_fund")], program.programId);
     console.log("the pragramPDA PDA address is", pragramPDA.toBase58(),"bump", _bump);
 
     let from = pragramPDA; 
@@ -210,7 +256,7 @@ describe("solana_bridge", () => {
     );
     }
 
-    const tx = await program.methods.withdrawFt("bridge_fund_112", new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL)).accounts({
+    const tx = await program.methods.withdrawFt("bridge_fund", new anchor.BN(0.1 * anchor.web3.LAMPORTS_PER_SOL)).accounts({
       myStorage:myStorage,
       pda:pragramPDA,
       to: to,

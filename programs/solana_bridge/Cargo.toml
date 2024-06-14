@@ -18,6 +18,7 @@ default = []
 [dependencies]
 anchor-lang = "0.26.0"
 anchor-spl = "0.26.0"
+spl-associated-token-account = "3.0.2"
 
 
 # [dependencies.anchor-lang]

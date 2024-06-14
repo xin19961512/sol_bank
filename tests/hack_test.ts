@@ -45,7 +45,7 @@ describe("hack_test", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
 
-  const mintpk = new anchor.web3.PublicKey("6MkRWmqMwimvbxtuUDEhUL5rKzkVbAMVbuysm2zYGBf6"); // token
+  const mintpk = new anchor.web3.PublicKey("97QKmAVRCBdK1HxQcSMMRocD8wbFCkHknFXqwptT737Y"); // token
   // const mintpk = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112"); // wsol
   const program = anchor.workspace.SolanaBridge as Program<SolanaBridge>;
 

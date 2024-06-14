@@ -7,7 +7,8 @@ pub struct DepositNative {
     pub to: Pubkey,
     pub value: u64,
     pub chain: String,
-    pub addr: String
+    pub addr: String,
+    pub time: i64,
 }
 
 #[event]
@@ -17,7 +18,8 @@ pub struct DepositFt {
     pub mint:Pubkey,
     pub value: u64,
     pub chain: String,
-    pub addr: String
+    pub addr: String,
+    pub time: i64,
 }
 
 #[event]
@@ -48,4 +50,17 @@ pub enum BridgeError {
     WrongATA,
     #[msg("ATA owner not fetch to the PDA")]
     WrongATAOwner,
+}
+
+#[account]
+pub struct MyStorage {
+    pub owner: Pubkey,
+    // pub pds: Pubkey
+}
+
+#[account]
+pub struct MyToken {
+    pub token_mint: Pubkey,
+    pub token_ata: Pubkey,
+    pub amount: u64,
 }

@@ -1,6 +1,7 @@
 use anchor_lang::{prelude::*};
 use anchor_lang::{system_program, ToAccountInfo};
 use anchor_spl::token::{self, TokenAccount, Token};
+// use spl_associated_token_account;
 use std::mem::size_of;
 
 pub mod status;
@@ -42,6 +43,62 @@ pub mod solana_bridge {
         Ok(())
     }
 
+    pub fn register_token(ctx: Context<RegisterToken>, pda_key: String, token_key: String) -> Result<()> {
+        require_keys_eq!(
+            ctx.accounts.authority.key(),
+            ctx.accounts.my_storage.owner,
+            BridgeError::NotOwner
+        );
+
+        let to_ata = anchor_spl::associated_token::get_associated_token_address(ctx.accounts.pda.key, ctx.accounts.mint.key);
+        require_keys_eq!(
+            ctx.accounts.to_ata.key(),
+            to_ata,
+            BridgeError::WrongATA
+        );
+        
+        if ctx.accounts.to_ata.to_account_info().data.borrow().as_ref().len() == 0 {
+            msg!{"ATA is not exist, start create"};
+            // let ix = spl_associated_token_account::instruction::create_associated_token_account(
+            //     ctx.accounts.to_ata.key,
+            //     ctx.accounts.pda.key,
+            //     ctx.accounts.mint.key,
+            //     ctx.accounts.token_program.key,
+            // );
+            
+            let cpi_ctx = CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::associated_token::Create {
+                    payer: ctx.accounts.authority.to_account_info(),
+                    associated_token: ctx.accounts.to_ata.to_account_info(),
+                    authority: ctx.accounts.pda.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
+                    system_program: ctx.accounts.system_program.to_account_info(),
+                    token_program: ctx.accounts.token_program.to_account_info()
+                }
+            );
+            anchor_spl::associated_token::create(cpi_ctx)?;
+
+            // token::initialize_account(CpiContext::new(
+            //     ctx.accounts.token_program.to_account_info(),
+            //     token::InitializeAccount {
+            //         account: ctx.accounts.to_ata.to_account_info(),
+            //         mint: ctx.accounts.mint.to_account_info(),
+            //         authority: ctx.accounts.authority.to_account_info(),
+            //         rent: ctx.accounts.authority.to_account_info(),
+            //     },
+            // ))?;
+        
+        };
+    
+        let token = &mut ctx.accounts.token;
+        token.token_mint = ctx.accounts.mint.key();
+        token.token_ata = to_ata;
+        token.amount = 0;
+
+        Ok(())
+    }
+
     pub fn deposit_native(ctx: Context<DepositNativeAccount>, amount :u64, target_chain : String, target_addr: String) -> Result<()>{
         let cpi_context = CpiContext::new(
             ctx.accounts.system_program.to_account_info(), 
@@ -55,30 +112,23 @@ pub mod solana_bridge {
         system_program::transfer(cpi_context, amount)?;
         let pda_balance_after = ctx.accounts.to.lamports();
         require_eq!(pda_balance_after, pda_balance_before + amount, BridgeError::DepositNE);
-
-        emit!(DepositNative{from: *ctx.accounts.from.key, to: *ctx.accounts.to.key, value: amount, chain:target_chain, addr: target_addr});
+        let clock: Clock = Clock::get()?;
+        emit!(DepositNative{
+            from: *ctx.accounts.from.key, 
+            to: *ctx.accounts.to.key, 
+            value: amount, 
+            chain:target_chain, 
+            addr: target_addr,
+            time: clock.unix_timestamp});
         Ok(())
     }
-
+ 
     pub fn deposit_ft(ctx: Context<DepositTokenAccount>, amount :u64, target_chain : String, target_addr: String) -> Result<()>{
-        // let to_ata = anchor_spl::associated_token::get_associated_token_address(ctx.accounts.pda.key, ctx.accounts.mint.key);
-        // if ctx.accounts.to_ata.to_account_info().data.borrow().as_ref().len() == 0 {
-        //     msg!{"ATA is not exist, start create"};
-        //     let cpi_ctx = CpiContext::new(
-        //         ctx.accounts.token_program.to_account_info(),
-        //         anchor_spl::associated_token::Create {
-        //             payer: ctx.accounts.authority.to_account_info(),
-        //             associated_token: ctx.accounts.to_ata.to_account_info(),
-        //             authority: ctx.accounts.pda.to_account_info(),
-        //             mint: ctx.accounts.mint.to_account_info(),
-        //             system_program: ctx.accounts.system_program.to_account_info(),
-        //             token_program: ctx.accounts.token_program.to_account_info(),
-        //         }
-        //     );
-        //     anchor_spl::associated_token::create(cpi_ctx)?;
-        // };
         // 校验ata的地址，确保ATA是由程序的PDA生成
         let to_ata = anchor_spl::associated_token::get_associated_token_address(ctx.accounts.pda.key, ctx.accounts.mint.key);
+        // TODO 可能遭受，假地址攻击
+        // 这里应该不用处理了，因为会对to_ata会校验，而to_ata是由我们程序pda生成的代币接受地址，这个地址由外部生成后，还会在程序中进行验证。所以就算是假地址，代币还是我们控制的
+        // 只需要后端在扫链监听event的时候，根据mint字段来判断，是我们支持的代币，就进行处理，不支持的，我们就不处理即可
         require_keys_eq!(
             to_ata,
             ctx.accounts.to_ata.key(),
@@ -103,8 +153,15 @@ pub mod solana_bridge {
         let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
 
         token::transfer(cpi_context, amount)?;
-
-        emit!(DepositFt{from: *ctx.accounts.from.key, to: *ctx.accounts.to.key, mint: ctx.accounts.mint.key(), value: amount, chain:target_chain, addr: target_addr});
+        let clock: Clock = Clock::get()?;
+        emit!(DepositFt{
+            from: *ctx.accounts.from.key, 
+            to: *ctx.accounts.to.key, 
+            mint: ctx.accounts.mint.key(), 
+            value: amount, 
+            chain:target_chain, 
+            addr: target_addr,
+            time: clock.unix_timestamp});
         Ok(())
     }
 
@@ -223,15 +280,37 @@ pub struct ModifyOwner<'info> {
 }
 
 #[derive(Accounts)]
-pub struct GetOwner<'info> {
+#[instruction(pda_key: String, token_key: String)]
+pub struct RegisterToken<'info> {
     #[account(seeds = [b"bridge_storage".as_ref()], bump)]
     pub my_storage: Account<'info, MyStorage>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + size_of::<MyToken>(),
+        seeds = [&token_key.as_bytes().as_ref()],
+        bump
+    )]
+    pub token: Account<'info, MyToken>,
+
+    #[account(mut,seeds = [&pda_key.as_bytes().as_ref()],bump)]
+    pub pda: SystemAccount<'info>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    #[account(mut)]
+    pub to_ata: AccountInfo<'info>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    pub mint: AccountInfo<'info>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 #[instruction(key: String)]
 pub struct WithdrawNative<'info> {
-    #[account(mut, seeds = [b"bridge_storage".as_ref()], bump)]
+    #[account(seeds = [b"bridge_storage".as_ref()], bump)]
     pub my_storage: Account<'info, MyStorage>,
     #[account(
         mut,
@@ -247,7 +326,7 @@ pub struct WithdrawNative<'info> {
 #[derive(Accounts)]
 #[instruction(key: String)]
 pub struct WithdrawFt<'info>{
-    #[account(mut, seeds = [b"bridge_storage".as_ref()], bump)]
+    #[account(seeds = [b"bridge_storage".as_ref()], bump)]
     pub my_storage: Account<'info, MyStorage>,
     #[account(
         mut,
@@ -267,12 +346,6 @@ pub struct WithdrawFt<'info>{
     pub authority: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
-}
-
-#[account]
-pub struct MyStorage {
-    pub owner: Pubkey,
-    // pub pds: Pubkey
 }
 
 #[derive(Accounts)]
